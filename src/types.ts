@@ -105,6 +105,138 @@ export interface Layer {
   imageUrl?: string;
 }
 
+export interface HomePageHeroSettings {
+  backgroundImageUrl: string;
+  badgeText: string;
+  titlePrefix: string;
+  titlePrimaryHighlight: string;
+  titleMiddle: string;
+  titleSecondaryHighlight: string;
+  titleSuffix: string;
+  description: string;
+  primaryButtonText: string;
+  primaryButtonHref: string;
+  secondaryButtonText: string;
+  secondaryButtonHref: string;
+}
+
+export interface HomePageServicesSettings {
+  eyebrowText: string;
+  title: string;
+  description: string;
+  highlightBadgeText: string;
+  detailsButtonText: string;
+  addButtonText: string;
+  priceLabel: string;
+  documentsLabel: string;
+  additionalDocumentsLabel: string;
+}
+
+export interface HomePageCtaSettings {
+  title: string;
+  description: string;
+  contactLabel: string;
+  phoneNumber: string;
+  workingHours: string;
+  buttonText: string;
+  buttonHref: string;
+}
+
+export interface HomePageThemeSettings {
+  pageBackground: string;
+  heroOverlayFrom: string;
+  heroOverlayVia: string;
+  heroOverlayTo: string;
+  heroAccentFrom: string;
+  heroAccentTo: string;
+  heroBadgeBackground: string;
+  heroBadgeBorder: string;
+  heroBadgeText: string;
+  heroTitleText: string;
+  heroDescriptionText: string;
+  heroPrimaryButtonFrom: string;
+  heroPrimaryButtonTo: string;
+  heroPrimaryButtonText: string;
+  heroSecondaryButtonBackground: string;
+  heroSecondaryButtonBorder: string;
+  heroSecondaryButtonText: string;
+  sectionGlowTop: string;
+  sectionGlowBottom: string;
+  sectionEyebrowText: string;
+  sectionTitleText: string;
+  sectionDividerFrom: string;
+  sectionDividerTo: string;
+  sectionDescriptionText: string;
+  sliderControlBackground: string;
+  sliderControlBorder: string;
+  sliderControlIcon: string;
+  sliderDotActive: string;
+  sliderDotInactive: string;
+  cardBackground: string;
+  cardBorder: string;
+  cardImageOverlay: string;
+  cardBadgeBackground: string;
+  cardBadgeText: string;
+  cardTitleText: string;
+  cardDescriptionText: string;
+  cardMetaText: string;
+  cardPriceText: string;
+  cardDocsPanelBackground: string;
+  cardDocsPanelBorder: string;
+  cardDocsPanelText: string;
+  cardDocsPanelAccent: string;
+  cardSecondaryButtonBackground: string;
+  cardSecondaryButtonBorder: string;
+  cardSecondaryButtonText: string;
+  cardPrimaryButtonFrom: string;
+  cardPrimaryButtonTo: string;
+  cardPrimaryButtonText: string;
+  ctaGlow: string;
+  ctaTitleText: string;
+  ctaDescriptionText: string;
+  ctaContactBackground: string;
+  ctaContactBorder: string;
+  ctaContactLabelText: string;
+  ctaPhoneText: string;
+  ctaHoursText: string;
+  ctaButtonFrom: string;
+  ctaButtonTo: string;
+  ctaButtonText: string;
+}
+
+export interface HomePageTypographySettings {
+  heroBadgeSize: number;
+  heroTitleMobile: number;
+  heroTitleDesktop: number;
+  heroDescriptionSize: number;
+  heroButtonSize: number;
+  sectionEyebrowSize: number;
+  sectionTitleMobile: number;
+  sectionTitleDesktop: number;
+  sectionDescriptionSize: number;
+  cardBadgeSize: number;
+  cardTitleSize: number;
+  cardDescriptionSize: number;
+  cardMetaSize: number;
+  cardPriceSize: number;
+  cardButtonSize: number;
+  ctaTitleMobile: number;
+  ctaTitleDesktop: number;
+  ctaDescriptionSize: number;
+  ctaContactLabelSize: number;
+  ctaPhoneSize: number;
+  ctaHoursSize: number;
+  ctaButtonSize: number;
+}
+
+export interface HomePageLayoutSettings {
+  hero: HomePageHeroSettings;
+  services: HomePageServicesSettings;
+  cta: HomePageCtaSettings;
+  theme: HomePageThemeSettings;
+  typography: HomePageTypographySettings;
+}
+
 export interface LayoutEditConfig {
   id: string;
   name: string;
@@ -113,6 +245,7 @@ export interface LayoutEditConfig {
   canvasHeight: number;
   backgroundColor: RGBColor;
   layers: Layer[];
+  homepage: HomePageLayoutSettings;
   createdAt: string;
   updatedAt: string;
   createdBy: string;
