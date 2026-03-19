@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { db, storage } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, setDoc, deleteDoc, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { Order, Product, OrderItem, LayoutEditConfig } from '@/types';
+import { Order, Product, OrderItem, LayoutEditConfig, ServiceProduct } from '@/types';
 import { 
   BarChart3, Package, ShoppingCart, TrendingUp, LogOut, Menu, X,
   CheckCircle, Clock, AlertCircle, Loader2, Search, Plus, FileText,
@@ -11,9 +11,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { useCart } from '@/context/CartContext';
 import { LayoutEditor } from '@/components/LayoutEditor';
-import { createDefaultLayout } from '@/lib/defaultLayout';
+import { DEFAULT_SERVICES } from '@/lib/defaultServices';
+import { createDefaultLayout, mergeLayoutWithDefaults } from '@/lib/defaultLayout';
 
 type AdminTab = 'dashboard' | 'orders' | 'completed' | 'products' | 'stats' | 'layout';
 
@@ -66,9 +66,8 @@ export default function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
-  const [layouts, setLayouts] = useState<LayoutEditConfig[]>([]);
-  const [currentLayout, setCurrentLayout] = useState<LayoutEditConfig | null>(null);
-  const [layoutsLoading, setLayoutsLoading] = useState(false);
+  const [currentLayout, setCurrentLayout] = useState<LayoutEditConfig>(createDefaultLayout());
+  const [layoutLoading, setLayoutLoading] = useState(false);
   const { user: adminUser } = useAuth();
   const router = useRouter();
 
@@ -147,36 +146,33 @@ export default function AdminDashboard() {
 
   // Carregar layouts
   useEffect(() => {
-    const loadLayouts = async () => {
-      setLayoutsLoading(true);
-      try {
-        const q = query(collection(db, "layoutEdit"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-          const fetchedLayouts: LayoutEditConfig[] = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          } as LayoutEditConfig));
-          setLayouts(fetchedLayouts);
-          
-          // Se não houver layouts salvos, usar o layout padrão
-          if (fetchedLayouts.length === 0) {
-            const defaultLayout = createDefaultLayout();
-            setCurrentLayout(defaultLayout);
-          } else if (!currentLayout) {
-            setCurrentLayout(fetchedLayouts[0]);
-          }
-          setLayoutsLoading(false);
-        });
-        return () => unsubscribe();
-      } catch (error) {
-        console.error('Erro ao carregar layouts:', error);
-        // Se houver erro, carregar layout padrão
-        const defaultLayout = createDefaultLayout();
-        setCurrentLayout(defaultLayout);
-        setLayoutsLoading(false);
+    setLayoutLoading(true);
+
+    const unsubscribe = onSnapshot(
+      doc(db, 'layoutEdit', 'default-layout'),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setCurrentLayout(createDefaultLayout());
+          setLayoutLoading(false);
+          return;
+        }
+
+        setCurrentLayout(
+          mergeLayoutWithDefaults({
+            id: snapshot.id,
+            ...snapshot.data(),
+          } as Partial<LayoutEditConfig>)
+        );
+        setLayoutLoading(false);
+      },
+      (error) => {
+        console.error('Erro ao carregar layout principal:', error);
+        setCurrentLayout(createDefaultLayout());
+        setLayoutLoading(false);
       }
-    };
-    loadLayouts();
+    );
+
+    return () => unsubscribe();
   }, []);
 
   // Cálculos de estatísticas
@@ -213,6 +209,22 @@ export default function AdminDashboard() {
     }
     return result;
   }, [activeTab, searchQuery, completedOrders, pendingOrders]);
+
+  const previewServices = useMemo<ServiceProduct[]>(() => {
+    if (products.length === 0) {
+      return DEFAULT_SERVICES;
+    }
+
+    return products.map((product) => ({
+      id: product.id,
+      title: product.title,
+      description: product.description,
+      price: product.price,
+      category: product.category,
+      requiredDocuments: product.requiredDocuments,
+      image: product.image || DEFAULT_SERVICES[0]?.image || '',
+    }));
+  }, [products]);
 
   const handleStatusUpdate = async (orderId: string, newStatus: Order['status']) => {
     try {
@@ -350,64 +362,22 @@ export default function AdminDashboard() {
 
   const handleSaveLayout = async (layout: LayoutEditConfig) => {
     try {
-      // Se for layout padrão ou novo, criar/atualizar
-      if (layout.id === 'new' || layout.id === 'default-layout') {
-        const layoutToSave = {
-          ...layout,
-          id: undefined,
-          createdAt: layout.createdAt === 'new' ? new Date().toISOString() : layout.createdAt,
-          updatedAt: new Date().toISOString(),
-          createdBy: adminUser?.id || 'unknown'
-        };
-        
-        // Verificar se já existe layout padrão
-        const existingDefault = layouts.find(l => l.id === 'default-layout');
-        
-        if (existingDefault) {
-          // Atualizar layout padrão existente
-          await setDoc(doc(db, 'layoutEdit', 'default-layout'), {
-            ...layoutToSave,
-            id: 'default-layout'
-          }, { merge: true });
-          alert('Layout padrão atualizado com sucesso!');
-          setCurrentLayout({ ...layoutToSave, id: 'default-layout' });
-        } else {
-          // Criar novo layout padrão
-          await setDoc(doc(db, 'layoutEdit', 'default-layout'), {
-            ...layoutToSave,
-            id: 'default-layout'
-          });
-          alert('Layout padrão salvo com sucesso!');
-          setCurrentLayout({ ...layoutToSave, id: 'default-layout' });
-        }
-      } else {
-        // Atualizar layout normal
-        await setDoc(doc(db, 'layoutEdit', layout.id), {
-          ...layout,
-          updatedAt: new Date().toISOString()
-        });
-        alert('Layout salvo com sucesso!');
-        setCurrentLayout(layout);
-      }
+      const normalizedLayout = mergeLayoutWithDefaults({
+        ...layout,
+        id: 'default-layout',
+        name: layout.name || 'Layout Principal do Site',
+        description: layout.description || 'Configuração visual da página inicial',
+        createdAt: currentLayout.createdAt || layout.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: adminUser?.id || currentLayout.createdBy || 'unknown',
+      });
+
+      await setDoc(doc(db, 'layoutEdit', 'default-layout'), normalizedLayout, { merge: true });
+      setCurrentLayout(normalizedLayout);
+      alert('Layout principal salvo com sucesso!');
     } catch (error) {
       console.error('Erro ao salvar layout:', error);
       alert('Erro ao salvar layout');
-    }
-  };
-
-  const handleDeleteLayout = async (layoutId: string) => {
-    if (!confirm('Tem certeza que deseja deletar este layout?')) return;
-    
-    try {
-      await deleteDoc(doc(db, 'layoutEdit', layoutId));
-      alert('Layout deletado com sucesso!');
-      setLayouts(layouts.filter(l => l.id !== layoutId));
-      if (currentLayout?.id === layoutId) {
-        setCurrentLayout(layouts.find(l => l.id !== layoutId) || null);
-      }
-    } catch (error) {
-      console.error('Erro ao deletar layout:', error);
-      alert('Erro ao deletar layout');
     }
   };
 
@@ -1066,78 +1036,24 @@ export default function AdminDashboard() {
             {/* Layout Editor Tab */}
             {activeTab === 'layout' && (
               <div className="space-y-6">
-                {/* Lista de Layouts */}
                 <div className="glass-panel p-6 rounded-xl border border-sky-500/20">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-sky-300">Meus Layouts</h3>
-                    <button
-                      onClick={() => {
-                        setCurrentLayout({
-                          id: 'new',
-                          name: 'Novo Layout',
-                          description: 'Layout criado',
-                          canvasWidth: 1200,
-                          canvasHeight: 600,
-                          backgroundColor: { r: 2, g: 12, b: 27 },
-                          layers: [],
-                          createdAt: new Date().toISOString(),
-                          updatedAt: new Date().toISOString(),
-                          createdBy: adminUser?.id || 'unknown'
-                        });
-                      }}
-                      className="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm hover:bg-sky-500 transition flex items-center gap-2"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Novo Layout
-                    </button>
-                  </div>
-
-                  {layoutsLoading ? (
-                    <div className="text-center text-slate-400 py-8">Carregando layouts...</div>
-                  ) : layouts.length === 0 ? (
-                    <div className="text-sm text-slate-400 py-8">Nenhum layout criado ainda</div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {layouts.map(layout => (
-                        <div
-                          key={layout.id}
-                          className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                            currentLayout?.id === layout.id
-                              ? 'bg-sky-600/30 border-sky-500'
-                              : 'bg-white/5 border-sky-500/20 hover:border-sky-500/50'
-                          }`}
-                          onClick={() => setCurrentLayout(layout)}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <h4 className="font-semibold text-white">{layout.name}</h4>
-                              <p className="text-xs text-slate-400 mt-1">{layout.description}</p>
-                              <p className="text-xs text-slate-500 mt-2">{layout.layers.length} camadas</p>
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteLayout(layout.id);
-                              }}
-                              className="p-2 hover:bg-red-600/30 rounded text-red-400"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <h3 className="text-lg font-bold text-sky-300">Layout Principal da Home</h3>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                    Esta aba controla a página inicial publicada. O preview abaixo usa o mesmo render da home e
+                    salva diretamente no layout principal do site.
+                  </p>
                 </div>
 
-                {/* Editor */}
-                {currentLayout && (
-                  <div className="h-[600px]">
-                    <LayoutEditor
-                      initialLayout={currentLayout}
-                      onSave={handleSaveLayout}
-                    />
+                {layoutLoading ? (
+                  <div className="glass-panel rounded-xl border border-sky-500/20 p-10 text-center text-slate-400">
+                    Carregando layout principal...
                   </div>
+                ) : (
+                  <LayoutEditor
+                    initialLayout={currentLayout}
+                    previewServices={previewServices}
+                    onSave={handleSaveLayout}
+                  />
                 )}
               </div>
             )}
